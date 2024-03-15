@@ -1,17 +1,18 @@
 package ru.yurov.testspringtelegrambot.services.bots;
 
-import lombok.SneakyThrows;
+import com.vdurmont.emoji.EmojiParser;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
-import org.telegram.telegrambots.meta.api.methods.send.SendVideoNote;
+import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.Chat;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import ru.yurov.testspringtelegrambot.config.BotConfig;
 import ru.yurov.testspringtelegrambot.exceptions.NoSuchCityException;
@@ -23,6 +24,7 @@ import ru.yurov.testspringtelegrambot.services.rest.ForecastRestService;
 import ru.yurov.testspringtelegrambot.services.rest.WeatherRestService;
 import ru.yurov.testspringtelegrambot.utils.MessageBuilder;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -34,6 +36,13 @@ public class WeatherBot extends TelegramLongPollingBot {
     private final ForecastRestService forecastService;
     private final UserService userService;
     private final MessageBuilder messageBuilder;
+
+    private boolean isForecast = false;
+    private boolean isSelect = false;
+
+    private int forecastDays = 0;
+
+    private static final String FORECAST_CALLBACK_PREFIX = "FORECAST_";
 
     @Autowired
     public WeatherBot(BotConfig botConfig, WeatherRestService weatherService, ForecastRestService forecastService,
@@ -48,20 +57,33 @@ public class WeatherBot extends TelegramLongPollingBot {
 
     @Override
     public void onUpdateReceived(Update update) {
-        if (!update.hasMessage()) {
-            return;
-        }
-
-        Message message = update.getMessage();
-        if (!message.hasText()) {
-            return;
-        }
-
         try {
+            if (update.hasCallbackQuery()) {
+                handleCallback(update.getCallbackQuery());
+                return;
+            } else if (!update.hasMessage()) {
+                return;
+            }
+
+            Message message = update.getMessage();
+            if (!message.hasText()) {
+                return;
+            }
+
             handleMessage(message);
         } catch (TelegramApiException e) {
             log.error("TelegramApiException: " + e.getMessage());
             throw new RuntimeException(e);
+        }
+    }
+
+    private void handleCallback(CallbackQuery callbackQuery) throws TelegramApiException {
+        String data = callbackQuery.getData();
+        if (data.startsWith(FORECAST_CALLBACK_PREFIX)) {
+            data = data.substring(FORECAST_CALLBACK_PREFIX.length());
+            forecastDays = ForecastDays.valueOf(data).getValue();
+
+            sendMessage(callbackQuery.getFrom().getId(), "Введите город:");
         }
     }
 
@@ -82,7 +104,9 @@ public class WeatherBot extends TelegramLongPollingBot {
             case "/start" -> sendMessage(chatId, messageBuilder.buildStartMessage(message.getChat().getFirstName()));
             case "/help" -> sendMessage(chatId, messageBuilder.buildHelpMessage());
             case "/select" -> handleSelectCommand(message, words);
-            case "/forecast" -> handleForecast(chatId, words);
+            case "/forecast" ->
+                    newHandleForecast(chatId);
+                    //handleForecast(chatId, words);
             case "/subscribe" -> {
                 updateSubscription(message.getChat(), true);
                 sendMessage(chatId, "Вы успешно подписались на рассылку!");
@@ -163,6 +187,72 @@ public class WeatherBot extends TelegramLongPollingBot {
         return sb.toString();
     }
 
+    private String createNewForecastMessage(long chatId, String city) throws TelegramApiException {
+        List<WeatherResponse> responses;
+        try {
+            responses = forecastService.getForecast(city, forecastDays);
+        } catch (NoSuchCityException | ServerException e) {
+            sendMessage(chatId, e.getMessage());
+            return null;
+        }
+
+        StringBuilder sb = new StringBuilder();
+        if (!responses.isEmpty()) {
+            sb.append(messageBuilder.buildWeatherWithCityMessage(responses.get(0)));
+        }
+        for (int i = 1; i < responses.size(); i++) {
+            sb.append("\n--------------------\n\n").append(messageBuilder.buildWeatherMessage(responses.get(i)));
+        }
+
+        return sb.toString();
+    }
+
+    private void newHandleForecast(long chatId) throws TelegramApiException {
+        var message = SendMessage.builder()
+                .chatId(chatId)
+                .text("На сколько дней вы хотите прогноз?")
+                .replyMarkup(createForecastDaysKeyboard())
+                .build();
+        this.execute(message);
+        isForecast = true;
+    }
+
+    private InlineKeyboardMarkup createForecastDaysKeyboard() {
+        InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
+        List<List<InlineKeyboardButton>> keyboard = new ArrayList<>();
+        List<InlineKeyboardButton> firstRow = new ArrayList<>();
+        List<InlineKeyboardButton> secondRow = new ArrayList<>();
+
+        var button1 = new InlineKeyboardButton();
+        button1.setCallbackData(ForecastDays.ONE.toString());
+        button1.setText(EmojiParser.parseToUnicode(":one:"));
+        var button2 = new InlineKeyboardButton();
+        button2.setCallbackData(ForecastDays.TWO.toString());
+        button2.setText(EmojiParser.parseToUnicode(":two:"));
+        var button3 = new InlineKeyboardButton();
+        button3.setCallbackData(ForecastDays.THREE.toString());
+        button3.setText(EmojiParser.parseToUnicode(":three:"));
+        var button4 = new InlineKeyboardButton();
+        button4.setCallbackData(ForecastDays.FOUR.toString());
+        button4.setText(EmojiParser.parseToUnicode(":four:"));
+        var button5 = new InlineKeyboardButton();
+        button5.setCallbackData(ForecastDays.FIVE.toString());
+        button5.setText(EmojiParser.parseToUnicode(":five:"));
+
+        firstRow.add(button1);
+        firstRow.add(button2);
+
+        secondRow.add(button3);
+        secondRow.add(button4);
+        secondRow.add(button5);
+
+        keyboard.add(firstRow);
+        keyboard.add(secondRow);
+        markup.setKeyboard(keyboard);
+
+        return markup;
+    }
+
     private void handleGetCommand(long chatId) throws TelegramApiException {
         Optional<User> userOptional = userService.getUserByChatId(chatId);
         if (userOptional.isPresent()) {
@@ -176,10 +266,18 @@ public class WeatherBot extends TelegramLongPollingBot {
     }
 
     private void parseCityName(Message message) throws TelegramApiException {
-        WeatherResponse weatherResponse = requestWeather(message.getChatId(), message.getText());
-        if (weatherResponse != null) {
-            String toSend = messageBuilder.buildSearchMessage(weatherResponse);
-            execute(new SendMessage(String.valueOf(message.getChatId()), toSend));
+        if (isForecast) {
+            String forecastMessage = createNewForecastMessage(message.getChatId(), message.getText());
+            if (forecastMessage != null) {
+                sendMessage(message.getChatId(), forecastMessage);
+                isForecast = false;
+            }
+        } else {
+            WeatherResponse weatherResponse = requestWeather(message.getChatId(), message.getText());
+            if (weatherResponse != null) {
+                String toSend = messageBuilder.buildSearchMessage(weatherResponse);
+                execute(new SendMessage(String.valueOf(message.getChatId()), toSend));
+            }
         }
     }
 

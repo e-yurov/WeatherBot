@@ -2,7 +2,7 @@ spring:
   config:
     import:
       - classpath:telegram.yml
-      - classpath:docker-db.yml
+      - classpath:db.yml
   jpa:
     properties:
       hibernate:
