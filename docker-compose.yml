@@ -1,0 +1,38 @@
+services:
+  db:
+    image: postgres:13
+    container_name: bot-test-db
+    secrets:
+      - db-password
+    expose:
+      - 5432
+#    ports:
+#      - "5433:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    networks:
+      - default
+    restart: always
+    environment:
+      - "POSTGRES_DB=app-db"
+      - "POSTGRES_USER=test-user"
+      - "POSTGRES_PASSWORD_FILE=/run/secrets/db-password"
+
+  app:
+    build: .
+    container_name: bot-test-app
+    depends_on:
+      - db
+    networks:
+      - default
+
+volumes:
+  db-data:
+networks:
+  default:
+    driver: bridge
+    name: test-bot
+
+secrets:
+  db-password:
+    file: db-password.txt

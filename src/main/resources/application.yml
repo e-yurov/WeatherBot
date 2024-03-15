@@ -1,0 +1,19 @@
+spring:
+  config:
+    import:
+      - classpath:telegram.yml
+      - classpath:docker-db.yml
+  jpa:
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        show_sql: true
+
+logging:
+  file:
+    name: ./logs/app-logs.log
+  level:
+    ru.yurov.testspringtelegrambot.services.rest.GeocoderRestService: ERROR
+    ru.yurov.testspringtelegrambot.services.rest.WeatherRestService: ERROR
+    ru.yurov.testspringtelegrambot.services.bots.WeatherBot: INFO
+    root: INFO
