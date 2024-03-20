@@ -1,4 +1,4 @@
-package ru.yurov.testspringtelegrambot.services.bots;
+package ru.yurov.testspringtelegrambot.services.bot;
 
 import com.vdurmont.emoji.EmojiParser;
 import lombok.extern.slf4j.Slf4j;
@@ -103,10 +103,8 @@ public class WeatherBot extends TelegramLongPollingBot {
         switch (command) {
             case "/start" -> sendMessage(chatId, messageBuilder.buildStartMessage(message.getChat().getFirstName()));
             case "/help" -> sendMessage(chatId, messageBuilder.buildHelpMessage());
-            case "/select" -> handleSelectCommand(message, words);
-            case "/forecast" ->
-                    newHandleForecast(chatId);
-                    //handleForecast(chatId, words);
+            case "/select" -> handleSelectCommand(chatId);
+            case "/forecast" -> handleForecast(chatId);
             case "/subscribe" -> {
                 updateSubscription(message.getChat(), true);
                 sendMessage(chatId, "Вы успешно подписались на рассылку!");
@@ -120,74 +118,12 @@ public class WeatherBot extends TelegramLongPollingBot {
         }
     }
 
-    private void handleSelectCommand(Message message, String[] words) throws TelegramApiException {
-        long chatId = message.getChatId();
-        if (words.length < 2) {
-            sendMessage(chatId, "Вы не ввели название города");
-        } else {
-            updateUser(message, words[1]);
-            sendMessage(chatId, "Город установлен");
-        }
+    private void handleSelectCommand(long chatId) throws TelegramApiException {
+        sendMessage(chatId, "Введите город:");
+        isSelect = true;
     }
 
-    private void handleForecast(long chatId, String[] words) throws TelegramApiException {
-        if (words.length < 2) {
-            sendMessage(chatId, "Вы не ввели количество дней");
-            return;
-        }
-
-        int days = 1;
-        try {
-            days = Integer.parseInt(words[1]);
-            if (days > 5) {
-                throw new Exception();
-            }
-        } catch (Exception e) {
-            sendMessage(chatId, "Неправильное количество дней");
-        }
-
-        String message = createForecastMessage(chatId, words, days);
-        if (message != null) {
-            sendMessage(chatId, message);
-        }
-    }
-
-    private String createForecastMessage(long chatId, String[] words, int days) throws TelegramApiException {
-        String city = null;
-        if (words.length > 2) {
-            city = words[2];
-        } else {
-            Optional<User> userOptional = userService.getUserByChatId(chatId);
-            if (userOptional.isPresent()) {
-                city = userOptional.get().getSelectedCity();
-            }
-        }
-
-        if (city == null) {
-            sendMessage(chatId, "Вы не выбрали город!");
-            return null;
-        }
-
-        List<WeatherResponse> responses;
-        try {
-            responses = forecastService.getForecast(city, days);
-        } catch (NoSuchCityException | ServerException e) {
-            sendMessage(chatId, e.getMessage());
-            return null;
-        }
-
-        StringBuilder sb = new StringBuilder();
-        if (!responses.isEmpty()) {
-            sb.append(messageBuilder.buildWeatherWithCityMessage(responses.get(0)));
-        }
-        for (int i = 1; i < responses.size(); i++) {
-            sb.append("\n--------------------\n\n").append(messageBuilder.buildWeatherMessage(responses.get(i)));
-        }
-
-        return sb.toString();
-    }
-
-    private String createNewForecastMessage(long chatId, String city) throws TelegramApiException {
+    private String createForecastMessage(long chatId, String city) throws TelegramApiException {
         List<WeatherResponse> responses;
         try {
             responses = forecastService.getForecast(city, forecastDays);
@@ -207,7 +143,7 @@ public class WeatherBot extends TelegramLongPollingBot {
         return sb.toString();
     }
 
-    private void newHandleForecast(long chatId) throws TelegramApiException {
+    private void handleForecast(long chatId) throws TelegramApiException {
         var message = SendMessage.builder()
                 .chatId(chatId)
                 .text("На сколько дней вы хотите прогноз?")
@@ -255,7 +191,7 @@ public class WeatherBot extends TelegramLongPollingBot {
 
     private void handleGetCommand(long chatId) throws TelegramApiException {
         Optional<User> userOptional = userService.getUserByChatId(chatId);
-        if (userOptional.isPresent()) {
+        if (userOptional.isPresent() && userOptional.get().getSelectedCity() != null) {
             WeatherResponse weatherResponse = requestWeather(chatId, userOptional.get().getSelectedCity());
             if (weatherResponse != null) {
                 sendMessage(chatId, messageBuilder.buildCurrentWeatherMessage(weatherResponse));
@@ -267,11 +203,15 @@ public class WeatherBot extends TelegramLongPollingBot {
 
     private void parseCityName(Message message) throws TelegramApiException {
         if (isForecast) {
-            String forecastMessage = createNewForecastMessage(message.getChatId(), message.getText());
+            String forecastMessage = createForecastMessage(message.getChatId(), message.getText());
             if (forecastMessage != null) {
                 sendMessage(message.getChatId(), forecastMessage);
                 isForecast = false;
             }
+        } else if (isSelect) {
+            updateUser(message, message.getText());
+            isSelect = false;
+            sendMessage(message.getChatId(), "Город установлен");
         } else {
             WeatherResponse weatherResponse = requestWeather(message.getChatId(), message.getText());
             if (weatherResponse != null) {
@@ -338,10 +278,6 @@ public class WeatherBot extends TelegramLongPollingBot {
         return weatherResponse;
     }
 
-    private void test() {
-        var msg = new SendMessage();
-    }
-
     @Scheduled(cron = "* 55 23 * * *")
     //@Scheduled(fixedDelay = 5_000L)
     private void sendScheduledForecast() {
@@ -349,7 +285,16 @@ public class WeatherBot extends TelegramLongPollingBot {
         for (User user : users) {
             if (user.isSubscribed()) {
                 try {
-                    handleForecast(user.getChatId(), new String[]{"/forecast", "1"});
+                    String city = user.getSelectedCity();
+                    if (city == null || city.isBlank()) {
+                        sendMessage(user.getChatId(), "Вы не выбрали город!");
+                        return;
+                    }
+
+                    String forecastMessage = createForecastMessage(user.getChatId(), city);
+                    if (forecastMessage != null) {
+                        sendMessage(user.getChatId(), forecastMessage);
+                    }
                 } catch (TelegramApiException e) {
                     log.error("TelegramApiException: " + e.getMessage());
                     throw new RuntimeException(e);

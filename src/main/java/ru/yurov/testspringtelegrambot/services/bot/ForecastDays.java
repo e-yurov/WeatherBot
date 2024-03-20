@@ -1,4 +1,4 @@
-package ru.yurov.testspringtelegrambot.services.bots;
+package ru.yurov.testspringtelegrambot.services.bot;
 
 public enum ForecastDays {
     ONE(1),

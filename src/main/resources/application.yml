@@ -15,5 +15,5 @@ logging:
   level:
     ru.yurov.testspringtelegrambot.services.rest.GeocoderRestService: ERROR
     ru.yurov.testspringtelegrambot.services.rest.WeatherRestService: ERROR
-    ru.yurov.testspringtelegrambot.services.bots.WeatherBot: INFO
+    ru.yurov.testspringtelegrambot.services.bot.WeatherBot: INFO
     root: INFO
