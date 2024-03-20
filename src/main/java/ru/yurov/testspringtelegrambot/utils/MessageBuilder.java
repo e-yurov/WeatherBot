@@ -3,8 +3,15 @@ package ru.yurov.testspringtelegrambot.utils;
 import org.springframework.stereotype.Component;
 import ru.yurov.testspringtelegrambot.models.weather.WeatherResponse;
 
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+
 @Component
 public class MessageBuilder {
+    private final DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("H:mm\nd MMMM yyyy");
+
     public String buildStartMessage(String firstName) {
         return "Здравствуйте, " + firstName + ". Используйте /help для получения подробной справки";
     }
@@ -16,13 +23,14 @@ public class MessageBuilder {
 
                "/start - приветствие и начало работы\n" +
                "/help - вывод этого сообщения\n" +
-               "/select *название города* - установить ваш город. Он будет использоваться для быстрого получения погоды и рассылки\n" +
-               "/forecast *количество дней* *город* - вывести прогноз погоды на указанное количество дней (не более 5) " +
-               "в указанном городе. Если город не указан в сообщении, то берется Ваш установленный (через команду /select)." +
+               "/select - установить ваш город. Он будет использоваться для быстрого получения погоды и рассылки." +
+               "Для установки нужно ввести название города в следующем сообщении\n" +
+               "/forecast - получить прогноз погоды. Необходимо выбрать количество дней (не более 5) " +
+               "и указать город в следующем сообщении." +
                "Прогноз выводится в виде измерений с периодичностью 3 часа.\n" +
                "/subscribe - подписаться на рассылку. Каждый день в 23:55 будет приходить прогноз погоды на следующий день.\n" +
                "/unsubscribe - отписаться от рассылки\n" +
-               "/get - узнать погоду в вашем городе.\n";
+               "/get - узнать погоду в вашем городе\n";
     }
 
     public String buildSearchMessage(WeatherResponse weatherResponse) {
@@ -44,9 +52,13 @@ public class MessageBuilder {
 
     public String buildWeatherMessage(WeatherResponse weatherResponse) {
         WeatherResponse.Main main = weatherResponse.getMain();
+        LocalDateTime dateTime = LocalDateTime.ofInstant(
+                Instant.ofEpochMilli(weatherResponse.getCurrentTime() * 1000L),
+                ZoneId.of("Europe/Moscow")
+        );
         return
-                "Погода: " + weatherResponse.getWeather().getDescription() + "\n\n" +
-
+                dateTime.format(dateTimeFormatter) + "\n\n" +
+                "Погода: " + weatherResponse.getWeather().getDescription() + "\n" +
                 "Температура " + main.getTemperature() + "°C\n" +
                 "Ощущается как " + main.getFeelsLike() + "°C\n" +
                 "Влажность " + main.getHumidity() + "%\n";
