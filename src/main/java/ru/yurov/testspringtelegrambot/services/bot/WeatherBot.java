@@ -114,6 +114,7 @@ public class WeatherBot extends TelegramLongPollingBot {
                 sendMessage(chatId, "Вы успешно отписались от рассылки!");
             }
             case "/get" -> handleGetCommand(chatId);
+            case "/logout" -> handleLogout(chatId);
             default -> sendMessage(chatId, "Команда не поддерживается");
         }
     }
@@ -201,6 +202,11 @@ public class WeatherBot extends TelegramLongPollingBot {
         }
     }
 
+    private void handleLogout(long chatId) throws TelegramApiException {
+        userService.deleteById(chatId);
+        sendMessage(chatId, "Вы успешно очистили свои данные!");
+    }
+
     private void parseCityName(Message message) throws TelegramApiException {
         if (isForecast) {
             String forecastMessage = createForecastMessage(message.getChatId(), message.getText());
@@ -279,7 +285,6 @@ public class WeatherBot extends TelegramLongPollingBot {
     }
 
     @Scheduled(cron = "* 55 23 * * *")
-    //@Scheduled(fixedDelay = 5_000L)
     private void sendScheduledForecast() {
         List<User> users = userService.getAllUsers();
         for (User user : users) {

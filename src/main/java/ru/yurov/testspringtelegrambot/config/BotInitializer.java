@@ -47,6 +47,7 @@ public class BotInitializer {
         botCommands.add(new BotCommand("/subscribe", "Подписаться на рассылку"));
         botCommands.add(new BotCommand("/unsubscribe", "Отписаться от рассылки"));
         botCommands.add(new BotCommand("/get", "Узнать погоду сейчас"));
+        botCommands.add(new BotCommand("/logout", "Очистить свои данные"));
 
         return botCommands;
     }

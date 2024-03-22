@@ -31,4 +31,9 @@ public class UserService {
     public void saveUser(User user) {
         userRepository.save(user);
     }
+
+    @Transactional
+    public void deleteById(long chatId) {
+        userRepository.deleteById(chatId);
+    }
 }
