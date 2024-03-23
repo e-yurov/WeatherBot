@@ -24,6 +24,8 @@ public class ForecastRestService {
     private final UrlBuilder urlBuilder;
     private final WeatherResponseConverter weatherResponseConverter;
 
+    public static final int MEASUREMENTS_IN_A_DAY = 8;
+
     @Autowired
     public ForecastRestService(GeocoderRestService geocoderService, UrlBuilder urlBuilder, WeatherResponseConverter weatherResponseConverter) {
         this.geocoderService = geocoderService;
@@ -34,7 +36,7 @@ public class ForecastRestService {
     public List<WeatherResponse> getForecast(String city, int days) throws NoSuchCityException, ServerException {
         GeocoderResponseDTO geocoderResponseDTO = geocoderService.getCoordinates(city);
         String url = urlBuilder.buildForecastUrl(geocoderResponseDTO.getLatitude(),
-                geocoderResponseDTO.getLongitude(), days * 8);
+                geocoderResponseDTO.getLongitude(), days * MEASUREMENTS_IN_A_DAY);
         RestTemplate restTemplate = new RestTemplate();
 
         ForecastResponseDTO forecastResponseDTO;

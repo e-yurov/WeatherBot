@@ -96,8 +96,7 @@ public class WeatherBot extends TelegramLongPollingBot {
     }
 
     private void parseCommand(Message message) throws TelegramApiException {
-        String[] words = message.getText().split(" ");
-        String command = words[0];
+        String command = message.getText().split(" ")[0];
         long chatId = message.getChatId();
 
         switch (command) {
